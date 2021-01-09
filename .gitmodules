@@ -1,0 +1,3 @@
+[submodule "amazon-product-api"]
+	path = amazon-product-api
+	url = https://github.com/RSenApps/amazon-product-api.git
