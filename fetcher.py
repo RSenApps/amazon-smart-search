@@ -4,7 +4,7 @@ from mezmorize import Cache
 import pandas as pd
 import json
 import requests
-cache = Cache(CACHE_TYPE='filesystem', CACHE_DIR='cache')
+cache = Cache(DEBUG=True, CACHE_TYPE='filesystem', CACHE_DIR='cache', CACHE_THRESHOLD=1024*1024, CACHE_DEFAULT_TIMEOUT=9999)
 
 
 def get_products(query, count=50):
@@ -18,6 +18,7 @@ def get_products(query, count=50):
 
 @cache.memoize()
 def run_scraper(parameters):
+    print("Running scraper: ", parameters)
     default_param = ["node", "amazon-product-api/bin/cli.js", "--random-ua", "--filetype=json"]
     output = subprocess.check_output(default_param + parameters, universal_newlines=True)
     filename = output.split("was saved to: ")[1].rstrip() + ".json"
@@ -26,9 +27,17 @@ def run_scraper(parameters):
     os.remove(filename)
     return result
 
+def isfloat(value):
+  try:
+    float(value)
+    return True
+  except ValueError:
+    return False
+
+
 def adjust_reviews(products_df):
     review_meta_dict = {asin : fetch_review_meta(asin) for asin in products_df["asin"]}
-    has_reviews = [k for k,v in review_meta_dict.items() if v['rating'] != '']
+    has_reviews = [k for k,v in review_meta_dict.items() if isfloat(v['rating'])]
     products_df.loc[products_df["asin"].isin(has_reviews), "reviews.rating"] = products_df["asin"].map({k : v["rating"] for k, v in review_meta_dict.items()})
     products_df['reviews.rating'] = products_df['reviews.rating'].astype(float)
     products_df.loc[products_df["asin"].isin(has_reviews), "reviews.total_reviews"] = products_df["asin"].map({k : v["count"] for k, v in review_meta_dict.items()})
@@ -36,4 +45,5 @@ def adjust_reviews(products_df):
 
 @cache.memoize()
 def fetch_review_meta(asin):
+    print("Fetching: ", asin)
     return requests.get("https://reviewmeta.com/api/amazon/" + asin).json()
